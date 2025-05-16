@@ -6,6 +6,8 @@ import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contr
 
 contract VotingPlus is Ownable {
 
+//////Structs//////
+
     //designe un electeurs
     struct Voter {
         bool isRegistered;
@@ -29,14 +31,15 @@ contract VotingPlus is Ownable {
         VotesTallied 
     }
 
-    //Events
+//////Events//////
+
     event VoterRegistered(address voterAddress);
     event WorkflowStatusChange(WorkflowStatus previousStatus, WorkflowStatus newStatus);
     event ProposalRegistered(uint proposalId);
     event Voted (address voter, uint proposalId);
 
 
-    //Variables globales
+//////Variables globales//////
 
     //whitelist des electeurs
     mapping (address => Voter) votersWhitelist;
@@ -48,8 +51,11 @@ contract VotingPlus is Ownable {
     //Liste des propositions
     Proposal[] proposals;
 
+//Constructeur
     constructor() Ownable(msg.sender){
     }
+
+//////Modifiers//////
 
     //Modifier servant a checker l'etat actuel du vote, empechant les acteurs d'agir au mauvais moment (y compris l'administrateur)
     modifier authorizeAction(WorkflowStatus _expectedState){
@@ -67,6 +73,8 @@ contract VotingPlus is Ownable {
         _;
     }
 
+///////Fonctions///////
+
     //L'administrateur peut ajouter un electeur a la votersWhitelist
     function registerVoter(address _voterAddress) external onlyOwner authorizeAction(WorkflowStatus.RegisteringVoters){
         require(!votersWhitelist[_voterAddress].isRegistered, "The voter is already on the votersWhitelist");
@@ -74,40 +82,27 @@ contract VotingPlus is Ownable {
         emit VoterRegistered(_voterAddress);
     }
 
-    //Fonctions permettant le changement d'etat
-    function startProposalRegistration() external onlyOwner authorizeAction(WorkflowStatus.RegisteringVoters){
-        currentState = WorkflowStatus.ProposalsRegistrationStarted;
-        nextStateChangeAuthorizedTimestamp = block.timestamp + 1 days; //donne 1 jour de temps aux electeurs pour proposer les propositions
-        emit WorkflowStatusChange(WorkflowStatus.RegisteringVoters, currentState);
-    }
-    function stopProposalRegistration() external onlyOwner authorizeAction(WorkflowStatus.ProposalsRegistrationStarted) delayRespected{
-        currentState = WorkflowStatus.ProposalsRegistrationEnded;
-        nextStateChangeAuthorizedTimestamp = 0; //pas besoin de delai pour la prochaine etape
-        emit WorkflowStatusChange(WorkflowStatus.ProposalsRegistrationStarted, currentState);
-    }
-    function startVotingSession() external onlyOwner authorizeAction(WorkflowStatus.ProposalsRegistrationEnded){
-        currentState = WorkflowStatus.VotingSessionStarted;
-        nextStateChangeAuthorizedTimestamp = block.timestamp + 1 days; //donne 1 jour de temps aux electeurs pour voter
-        emit WorkflowStatusChange(WorkflowStatus.ProposalsRegistrationEnded, currentState);
-    }
-    function stopVotingSession() external onlyOwner authorizeAction(WorkflowStatus.VotingSessionStarted) delayRespected{
-        currentState = WorkflowStatus.VotingSessionEnded;
-        nextStateChangeAuthorizedTimestamp = 0; //pas besoin de delai pour la prochaine etape
-        emit WorkflowStatusChange(WorkflowStatus.VotingSessionStarted, currentState);
-    }
-    function votesTallied() external onlyOwner authorizeAction(WorkflowStatus.VotingSessionEnded){
-        currentState = WorkflowStatus.VotesTallied;
-        nextStateChangeAuthorizedTimestamp = 0; //pas besoin de delai pour la prochaine etape
-        emit WorkflowStatusChange(WorkflowStatus.VotingSessionEnded, currentState);
-    }
+    //Fonction permettant le changement d'etat
+    function changeVotingState() external onlyOwner delayRespected{
+        require(currentState != WorkflowStatus.VotesTallied, "Votes are already tallied, the voting process is over");
 
+        nextStateChangeAuthorizedTimestamp = block.timestamp + 1 hours; //donne 1 heure de temps minimum entre les etapes
+        //Enregistrer l'etat courant
+        WorkflowStatus previousState = currentState;
+        //Set l'etat courant au suivant
+        uint nextState = uint(currentState) + 1; 
+        currentState = WorkflowStatus(nextState);
+        //event
+        emit WorkflowStatusChange(previousState, currentState);
+    }
 
     //Fonction d'enregistrement des propositions
     function registerProposal(string calldata _description) external authorizeAction(WorkflowStatus.ProposalsRegistrationStarted) isRegistered {
         Proposal memory newProposal = Proposal(_description, 0);
         proposals.push(newProposal);
         emit ProposalRegistered(uint(proposals.length -1)); 
-        //L'ID de la proposition est enregistre en tant qu'event dans la transaction, c est sa place dans le tableau proposals[]
+        //L'ID de la proposition est enregistre en tant qu'event dans la transaction, c est sa place dans le tableau proposals[].
+        //Servira aux electeurs pour savoir pour qui voter
     }
 
     //Fonction de vote
