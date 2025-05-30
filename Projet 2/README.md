@@ -1,5 +1,5 @@
 
-Autre approche : PAR FONCTIONNALITE
+Tests effectués (voting.test.js)
  - Initial state:
         => Premier test qui fait rien, deploie juste le contrat pour voir si tout va bien
         => Check que on est bien en mode RegisteringVoters au deploiement
